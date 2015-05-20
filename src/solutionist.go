@@ -1,13 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"flag"
-	//fp "path/filepath"
+	"fmt"
 	"github.com/op/go-logging"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
-	user "os/user"
+	"os/user"
 	"strings"
 )
 
@@ -29,6 +31,18 @@ type CmdlineArgs struct {
 	//port int
 }
 
+type GradleConfig struct {
+	version                 string
+	group                   string
+	description             string
+	internalProjectName     string
+	customerName            string
+	projectFullName         string
+	tasVersion              string
+	testCase                string
+	customerReferenceNumber string
+}
+
 type Password string
 
 func (p Password) Redacted() interface{} {
@@ -41,7 +55,12 @@ func main() {
 	showInfo()
 	checkEnvironment()
 	//checkEmptyDir()
-	downloadGradleBuildTemplate()
+	if !downloadGradleBuildTemplate() {
+		log.Critical("As the download failed there is nothing more to do. This ends now. :(")
+	} else {
+		patchGradleConfig()
+
+	}
 }
 
 func parseCmdline() CmdlineArgs {
@@ -59,30 +78,42 @@ func parseCmdline() CmdlineArgs {
 	debug := flag.Bool("debug", false, "Show debug information")
 	flag.Parse()
 
-    err = os.MkdirAll(*dir, 0777)
+	err = os.MkdirAll(*dir, 0777)
 	if err != nil {
 		panic(err)
 	}
-    
+
 	return CmdlineArgs{dir: *dir, username: *username, password: *password, logfile: *logfile, debug: *debug}
 }
-
 
 func setupLogging() {
 	consoleFormat := logging.MustStringFormatter("%{color}%{message}%{color:reset}")
 	consoleBackend := logging.NewLogBackend(os.Stdout, "", 0)
-	consoleBackendFormatter := logging.NewBackendFormatter(consoleBackend, consoleFormat)
-	logging.SetBackend(consoleBackendFormatter)
+	consoleBackendFormatted := logging.NewBackendFormatter(consoleBackend, consoleFormat)
+	consoleBackendLeveled := logging.AddModuleLevel(consoleBackendFormatted)
+	consoleBackendLeveled.SetLevel(logging.INFO, "")
+	if args.debug {
+		logging.SetBackend(consoleBackendFormatted)
+	} else {
+		logging.SetBackend(consoleBackendLeveled)
+	}
 
 	if args.logfile {
-		file, err := os.Create(args.dir +"/solutionist.log")
+		file, err := os.Create(args.dir + "/solutionist.log")
 		if err != nil {
 			log.Error("%v", err)
 		} else {
 			fileFormat := logging.MustStringFormatter("%{time:15:04:05.000} %{shortfile:20s} %{level: 8s} | %{message}")
 			fileBackend := logging.NewLogBackend(file, "", 0)
-			fileBackendFormatter := logging.NewBackendFormatter(fileBackend, fileFormat)
-			logging.SetBackend(consoleBackendFormatter, fileBackendFormatter)
+			fileBackendFormatted := logging.NewBackendFormatter(fileBackend, fileFormat)
+			fileBackendLeveled := logging.AddModuleLevel(fileBackendFormatted)
+			fileBackendLeveled.SetLevel(logging.INFO, "")
+			if args.debug {
+				logging.SetBackend(consoleBackendFormatted, fileBackendFormatted)
+			} else {
+				logging.SetBackend(consoleBackendLeveled, fileBackendLeveled)
+			}
+
 		}
 	}
 }
@@ -103,6 +134,8 @@ func checkEnvironment() {
 	checkEnvVar("JAVA_HOME_6")
 	checkEnvVar("JAVA_HOME_7")
 	checkEnvVar("JAVA_HOME_8")
+	checkEnvVar("GRADLE_HOME")
+	checkEnvVar("GRADLE_HOME_USER")
 	log.Debug("TODO: Offer to fix that up if necessary")
 }
 
@@ -118,9 +151,37 @@ func checkEnvVar(key string) {
 
 func downloadGradleBuildTemplate() bool {
 	log.Info("")
-	log.Info("> Downloading Gradle build template:")
+	log.Info("> Downloading Gradle build template to directory [%s]", args.dir)
 
-	log.Debug("TODO: Check if login and password are present")
+	if args.username == "" {
+		log.Warning("Username needed:")
+		fmt.Print("> ")
+		reader := bufio.NewReader(os.Stdin)
+		input, _, err := reader.ReadLine()
+		if err != nil {
+			log.Critical("Error: %v", err)
+		}
+		log.Debug("Username provided: %v", string(input))
+		log.Debug("Username provided: %v", input)
+		log.Debug("Username length: %d", len(input))
+		args.username = string(input)
+
+	}
+
+	if args.password == "" {
+		log.Warning("Password needed:")
+		fmt.Print("> ")
+		reader := bufio.NewReader(os.Stdin)
+		input, _, err := reader.ReadLine()
+		if err != nil {
+			log.Critical("Error: %v", err)
+		}
+		log.Debug("Password provided: %v", string(input))
+		log.Debug("Password provided: %v", input)
+		log.Debug("Password length: %d", len(input))
+		args.password = string(input)
+
+	}
 
 	success := false
 	url := "http://helga/scm/hg/gradle/solution-plugin/raw-file/tip/setup/template-build.gradle"
@@ -153,4 +214,30 @@ func downloadGradleBuildTemplate() bool {
 	}
 
 	return success
+}
+
+func collectGradleConfig() {
+
+}
+
+func patchGradleConfig() {
+	input, err := ioutil.ReadFile(args.dir + "/gradle.build")
+	if err != nil {
+		log.Critical("%v", err)
+	}
+
+	lines := strings.Split(string(input), "\n")
+
+	for i, line := range lines {
+		if !strings.HasPrefix(line, "/") && !strings.HasPrefix(line, "*") {
+			if strings.Contains(line, "]") {
+				lines[i] = "LOL"
+			}
+		}
+	}
+
+	output := strings.Join(lines, "\n")
+	if err = ioutil.WriteFile("myfile", []byte(output), 0777); err != nil {
+		log.Critical("%v", err)
+	}
 }
