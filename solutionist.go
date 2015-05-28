@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/bgentry/speakeasy"
+	"github.com/franela/goreq"
 	"github.com/nu7hatch/gouuid"
 	"github.com/op/go-logging"
 	"io"
@@ -17,13 +18,14 @@ import (
 )
 
 const (
-	version = "0.0.1"
+	version = "0.9.0"
 )
 
 var (
 	log    = logging.MustGetLogger("solutionist")
 	args   CmdlineArgs
 	gradle GradleConfig
+	helga  HelgaConfig
 )
 
 type CmdlineArgs struct {
@@ -37,11 +39,20 @@ type CmdlineArgs struct {
 func (a CmdlineArgs) String() string {
 	args := fmt.Sprintf("dir=%s\n", a.dir)
 	args += fmt.Sprintf("username=%s\n", a.username)
-	args += fmt.Sprintf("password=%s\n", strings.Repeat("*", len(a.password)))
+	args += fmt.Sprintf("password=%s\n", a.maskedPassword())
 	args += fmt.Sprintf("logfile=%v\n", a.logfile)
 	args += fmt.Sprintf("debug=%v\n", a.debug)
-
 	return args
+}
+
+func (a CmdlineArgs) maskedPassword() string {
+	return strings.Repeat("*", len(a.password))
+}
+
+type Hidden string
+
+func (h Hidden) Redacted() interface{} {
+	return logging.Redact(string(h))
 }
 
 type GradleConfig struct {
@@ -59,10 +70,13 @@ type GradleConfig struct {
 	projectType             string
 }
 
-type Password string
-
-func (p Password) Redacted() interface{} {
-	return logging.Redact(string(p))
+// tags are used by reflection
+type HelgaConfig struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Contact     string `json:"contact"`
+	Description string `json:"description"`
+	Public      string `json:"public"`
 }
 
 func main() {
@@ -80,7 +94,9 @@ func main() {
 	executeCmd("hg", "init", ``+args.dir+``)
 	executeCmd("hg", "addremove", ``+args.dir+``)
 	executeCmd("hg", "commit", `-m Start a new Gradle project`, ``+args.dir+``)
-	//TODO: createHelgaRepo()
+	setupDefaultHelgaConfig()
+	collectHelgaConfig()
+	createHelgaRepo()
 }
 
 func parseCmdline() CmdlineArgs {
@@ -88,7 +104,7 @@ func parseCmdline() CmdlineArgs {
 	currentUser, err := user.Current()
 	if err == nil {
 		usernameParts := strings.Split(currentUser.Username, "\\")
-		defaultUsername = usernameParts[len(usernameParts)-1]
+		defaultUsername = strings.ToLower(usernameParts[len(usernameParts)-1])
 	}
 
 	dir := flag.String("dir", ".", "Target directory to create project in; defaults to current directory")
@@ -139,9 +155,18 @@ func setupLogging() {
 }
 
 func showInfo() {
-	log.Info("=====================")
-	log.Info("| Solutionist %s |", version)
-	log.Info("=====================")
+	log.Info(`
+            ,    _
+           /|   | |
+         _/_\_  >_<
+        .-\-/.   |
+       /  | | \_ |
+       \ \| |\__(/
+       /('---')  |
+      / /     \  |
+   _.'  \'-'  /  |
+   \----/\=-=/   ' Solutionist ` + version)
+	log.Info("========================================")
 	log.Debug("")
 	log.Debug("Using these parameters (use -h for help):")
 	log.Debug("%s", args)
@@ -163,9 +188,9 @@ func checkEnvVar(key string) {
 	value := os.Getenv(key)
 	if value == "" {
 		value = "NOT SET"
-		log.Warning(key + ":\t" + value)
+		log.Warning("%16s"+": %s", key, value)
 	} else {
-		log.Notice(key + ":\t" + value)
+		log.Notice("%16s"+": %s", key, value)
 	}
 }
 
@@ -196,7 +221,7 @@ func downloadGradleBuildTemplate() {
 			log.Critical("Error: %v", err)
 			log.Fatal("No reason to go on. This ends now :(")
 		}
-		log.Debug("Password provided: %v", Password(input))
+		log.Debug("Password provided: %v", Hidden(input))
 		log.Debug("Password length: %d", len(input))
 		args.password = string(input)
 
@@ -261,9 +286,9 @@ func setupDefaultGradleConfig() {
 		version:                 "1.0.0-SNAPSHOT",
 		group:                   "com.topdesk.solution.customer",
 		description:             "Tool for customizing icons in the Self Service Desk",
-		internalProjectName:     "customer-name_project-name",
 		customerName:            "My Customer Name",
 		projectFullName:         "My Project Name",
+		internalProjectName:     "customer-name_project-name",
 		tasVersion:              "5.5.1",
 		isXfgProject:            "false",
 		testCase:                "",
@@ -394,11 +419,6 @@ func patchGradleConfig() {
 	}
 
 	lines := strings.Split(string(input), "\n")
-
-	// find line with 'version', save index
-	// find line with 'dependencies', save index
-	// comment that part out
-	// insert new values before that
 	startIndex := 0
 	endIndex := 0
 
@@ -444,5 +464,74 @@ func executeCmd(cmdName string, cmdArgs ...string) {
 	if err != nil {
 		log.Fatalf("%s\nThis ended abruptly.", err)
 	}
+}
 
+func setupDefaultHelgaConfig() {
+	/* names
+	Customer project:                                customers/[reference-number]_[customer-name]/[project-name]
+	Add-on:                                          add-ons/[add-on-name]
+	Prototype:                                       prototypes/[prototype-name]
+	Tool (used by consultants, i.e.: XFG, XIM):      tools/[tool-project-name]
+	Libraries:                                       resources/[internal-project-name]
+	Playground/Apekooien:                            sandbox/[username]/[project-name]
+	*/
+	helga = HelgaConfig{
+		Name:        "",
+		Type:        "hg",
+		Description: gradle.description,
+		Contact:     args.username + "@topdesk.com",
+		Public:      "true",
+	}
+}
+
+func collectHelgaConfig() {
+	log.Info("> Processing settings for new repo on Helga:")
+	log.Notice("The values inside the brackets [] will be used if you enter nothing.")
+
+	requestConfigValue(&helga.Name, `
+NAME:
+One of these depending on the type of your project:
+- customers/[reference-number]_[customer-name]/[project-name]
+- add-ons/[add-on-name]
+- prototypes/[prototype-name]
+- tools/[tool-project-name] (Tool, also used by nondevs, e.g. XFG, XIM)
+- resources/[internal-project-name] (Libraries go here)
+- events/[internal-project-name]
+- products/[internal-project-name]
+- sandbox/[username]/[project-name] (Playground/Apekooien)
+
+Suggestions are based on the chosen project group.
+    `)
+	/*
+		GROUP:
+		One of these depending on the type of your project:
+		- com.topdesk.solution.customer (for a TOPdesk client)
+		- com.topdesk.solution.addon
+		- com.topdesk.solution.prototype
+		- com.topdesk.solution.tool (intended for internal use, not limited to consultancy)
+		- com.topdesk.solution.lib (a jar not a bespoke zip)
+		- com.topdesk.solution.event (like a look & feel for a world cup etc)
+		- com.topdesk.solution.product
+	*/
+}
+
+func createHelgaRepo() {
+	res, err := goreq.Request{
+		Method:            "POST",
+		Uri:               "http://helga/scm/api/rest/repositories",
+		BasicAuthUsername: args.username,
+		BasicAuthPassword: args.password,
+		ContentType:       "application/json",
+		Body:              helga,
+	}.Do()
+	if err != nil {
+		log.Fatalf("Could not create repo on Helga: %s", err)
+	} else {
+		s, _ := res.Body.ToString()
+		if s == "" {
+			log.Notice("Repository created at: http://helga/scm/hg/%s", helga.Name)
+		} else {
+			log.Critical("Something went wrong:\n  %v", s)
+		}
+	}
 }
