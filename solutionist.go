@@ -99,6 +99,14 @@ func main() {
 	createHelgaRepo()
 }
 
+/*
+func handle(e error) {
+    if e != nil {
+        panic(e)
+    }
+}
+*/
+
 func parseCmdline() CmdlineArgs {
 	defaultUsername := ""
 	currentUser, err := user.Current()
@@ -286,8 +294,8 @@ func setupDefaultGradleConfig() {
 		version:                 "1.0.0-SNAPSHOT",
 		group:                   "com.topdesk.solution.customer",
 		description:             "Tool for customizing icons in the Self Service Desk",
-		customerName:            "My Customer Name",
-		projectFullName:         "My Project Name",
+		customerName:            "Customer Name",
+		projectFullName:         "Project Name",
 		internalProjectName:     "customer-name_project-name",
 		tasVersion:              "5.5.1",
 		isXfgProject:            "false",
@@ -327,12 +335,6 @@ DESCRIPTION:
 Short description of the project
     `)
 
-	requestConfigValue(&gradle.internalProjectName, `
-INTERNALPROJECTNAME:
-Used as artifact id for publishing to nexus. Use the format 'customer-name_project-name' if it's a
-customer project, otherwise use 'project-name', or 'project-name-x.x' if you release TOPdesk specific        builds (e.g: for an add-on).
-    `)
-
 	requestConfigValue(&gradle.customerName, `
 CUSTOMERNAME:
 Full name of the customer: will end up as part of the ZIP file's name.
@@ -341,6 +343,12 @@ Full name of the customer: will end up as part of the ZIP file's name.
 	requestConfigValue(&gradle.projectFullName, `
 PROJECTFULLNAME:
 Full name of the project: will end up as part of the ZIP file's name.
+    `)
+
+	requestConfigValue(&gradle.internalProjectName, `
+INTERNALPROJECTNAME:
+Used as artifact id for publishing to nexus. Use the format 'customer-name_project-name' if it's a
+customer project, otherwise use 'project-name', or 'project-name-x.x' if you release TOPdesk specific        builds (e.g: for an add-on).
     `)
 
 	requestConfigValue(&gradle.tasVersion, `
@@ -530,8 +538,22 @@ func createHelgaRepo() {
 		s, _ := res.Body.ToString()
 		if s == "" {
 			log.Notice("Repository created at: http://helga/scm/hg/%s", helga.Name)
+			linkHelgaRepo()
 		} else {
 			log.Critical("Something went wrong:\n  %v", s)
 		}
+	}
+}
+
+func linkHelgaRepo() {
+	hgrc := make([]string, 0)
+	hgrc = append(hgrc, "[paths]")
+	hgrc = append(hgrc, "default = http://helga/scm/hg/"+helga.Name)
+
+	output := strings.Join(hgrc, "\n")
+	if err := ioutil.WriteFile(args.dir+"/.hg/hgrc", []byte(output), 0777); err != nil {
+		log.Critical("Could not write to hgrc: %s", err)
+	} else {
+		log.Notice(".hg/hgrc created accordingly")
 	}
 }
