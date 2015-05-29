@@ -24,9 +24,9 @@ This behavior can be overriden with commandline flags:
  * logfile - creates a logfile in the project directory
  * debug - provides some additional information
 
-'''
+```
 solutionist -dir="d:\my funky project" -username=chuckn -password=iamchucknorris -logfile -debug
-'''
+```
 
 
 
