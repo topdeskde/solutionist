@@ -12,7 +12,7 @@ Solutionist is a commandline application which interacts with
 
 ## How to use
 
-The solutionist will try to guess certain things and ask about others.
+The Solutionist will try to guess certain things and ask about others.
 If not specified it will use the current directory as its working directory.
 It will use the username of the current user to login to HELGA.
 It will use the username of the current user to assign a contact mail address.
