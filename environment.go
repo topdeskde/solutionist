@@ -12,7 +12,7 @@ func checkEnvironment() {
 	checkEnvVar("JAVA_HOME_7")
 	checkEnvVar("JAVA_HOME_8")
 	checkEnvVar("GRADLE_HOME")
-	checkEnvVar("GRADLE_HOME_USER")
+	checkEnvVar("GRADLE_USER_HOME")
 	log.Debug("TODO: Offer to fix that up if necessary")
 }
 

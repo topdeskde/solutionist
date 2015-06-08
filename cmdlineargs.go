@@ -14,6 +14,7 @@ type CmdlineArgs struct {
 	password string
 	logfile  bool
 	debug    bool
+	color    bool
 }
 
 func (a CmdlineArgs) String() string {
@@ -22,6 +23,7 @@ func (a CmdlineArgs) String() string {
 	args += fmt.Sprintf("password=%s\n", a.maskedPassword())
 	args += fmt.Sprintf("logfile=%v\n", a.logfile)
 	args += fmt.Sprintf("debug=%v\n", a.debug)
+	args += fmt.Sprintf("color=%v\n", a.color)
 	return args
 }
 
@@ -42,6 +44,7 @@ func parseCmdline() CmdlineArgs {
 	password := flag.String("password", "", "Password used for authentication")
 	logfile := flag.Bool("logfile", false, "Logs output to logile in project directory")
 	debug := flag.Bool("debug", false, "Show debug information")
+	color := flag.Bool("color", false, "Use colors in output. Uses ANSI escape sequences")
 	flag.Parse()
 
 	err = os.MkdirAll(*dir, 0777)
@@ -49,5 +52,5 @@ func parseCmdline() CmdlineArgs {
 		log.Fatal("Target directory could not be created: %s", err)
 	}
 
-	return CmdlineArgs{dir: *dir, username: *username, password: *password, logfile: *logfile, debug: *debug}
+	return CmdlineArgs{dir: *dir, username: *username, password: *password, logfile: *logfile, debug: *debug, color: *color}
 }

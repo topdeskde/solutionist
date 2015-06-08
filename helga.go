@@ -37,7 +37,7 @@ func collectHelgaConfig() {
 	log.Info("> Processing settings for new repo on Helga:")
 	log.Notice("The values inside the brackets [] will be used if you enter nothing.")
 
-	requestConfigValue(&helga.Name, `
+	requestInput(&helga.Name, `
 NAME:
 One of these depending on the type of your project:
 - customers/[reference-number]_[customer-name]/[project-name]

@@ -12,7 +12,13 @@ func (h Hidden) Redacted() interface{} {
 }
 
 func setupLogging() {
-	consoleFormat := logging.MustStringFormatter("%{color}%{message}%{color:reset}")
+
+	consoleFormat := logging.MustStringFormatter("%{message}")
+
+	if args.color {
+		consoleFormat = logging.MustStringFormatter("%{color}%{message}%{color:reset}")
+	}
+
 	consoleBackend := logging.NewLogBackend(os.Stdout, "", 0)
 	consoleBackendFormatted := logging.NewBackendFormatter(consoleBackend, consoleFormat)
 	consoleBackendLeveled := logging.AddModuleLevel(consoleBackendFormatted)

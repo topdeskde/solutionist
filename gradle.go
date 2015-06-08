@@ -1,14 +1,8 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
-	"github.com/bgentry/speakeasy"
 	"github.com/nu7hatch/gouuid"
-	"io"
 	"io/ioutil"
-	"net/http"
-	"os"
 	"strings"
 )
 
@@ -32,62 +26,16 @@ func downloadGradleBuildTemplate() {
 	log.Info("> Downloading Gradle build template to directory [%s]", args.dir)
 
 	if args.username == "" {
-		log.Warning("Username needed:")
-		fmt.Print("> ")
-		reader := bufio.NewReader(os.Stdin)
-		input, _, err := reader.ReadLine()
-		if err != nil {
-			log.Critical("Error: %v", err)
-			log.Fatal("No reason to go on. This ends now :(")
-		}
-		log.Debug("Username provided: %v", string(input))
-		log.Debug("Username provided: %v", input)
-		log.Debug("Username length: %d", len(input))
-		args.username = string(input)
-
+		requestInput(&args.username, "Username needed:")
 	}
 
 	if args.password == "" {
-		log.Warning("Password needed:")
-		input, err := speakeasy.Ask("> ")
-		if err != nil {
-			log.Critical("Error: %v", err)
-			log.Fatal("No reason to go on. This ends now :(")
-		}
-		log.Debug("Password provided: %v", Hidden(input))
-		log.Debug("Password length: %d", len(input))
-		args.password = string(input)
-
+		requestHiddenInput(&args.password, "Password needed:")
 	}
 
 	url := "http://helga/scm/hg/gradle/solution-plugin/raw-file/tip/setup/template-build.gradle"
 
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", url, nil)
-	req.SetBasicAuth(args.username, args.password)
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Panic(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 200 {
-		file, err := os.Create(args.dir + "/build.gradle")
-		if err != nil {
-			log.Panic("Failed to create build.gradle: %s", err)
-		}
-		defer file.Close()
-
-		size, err := io.Copy(file, resp.Body)
-		if err != nil {
-			log.Panic("Failed to write downloaded data to build.gradle: %s", err)
-		}
-
-		log.Notice("build.gradle with %v bytes downloaded", size)
-	} else {
-		log.Critical("Error: %s", resp.Status)
-		log.Fatal("No reason to go on. This ends now :(")
-	}
+	downloadFromUrl(url, args.dir, "build.gradle", args.username, args.password)
 }
 
 func setupDefaultGradleConfig() {
@@ -118,13 +66,13 @@ func collectGradleConfig() {
 	log.Notice("You can later edit this normally in your editor of choice.")
 	log.Notice("The values inside the brackets [] will be used if you enter nothing.")
 
-	requestConfigValue(&gradle.version, `
+	requestInput(&gradle.version, `
 VERSION:
 Version of the project, e.g: 1.0.0
 Add -SNAPSHOT to indicate it is a work in progress
     `)
 
-	requestConfigValue(&gradle.group, `
+	requestInput(&gradle.group, `
 GROUP:
 One of these depending on the type of your project:
  - com.topdesk.solution.customer (for a TOPdesk client)
@@ -136,57 +84,57 @@ One of these depending on the type of your project:
  - com.topdesk.solution.product
     `)
 
-	requestConfigValue(&gradle.description, `
+	requestInput(&gradle.description, `
 DESCRIPTION:
 Short description of the project
     `)
 
-	requestConfigValue(&gradle.customerName, `
+	requestInput(&gradle.customerName, `
 CUSTOMERNAME:
 Full name of the customer: will end up as part of the ZIP file's name.
     `)
 
-	requestConfigValue(&gradle.projectFullName, `
+	requestInput(&gradle.projectFullName, `
 PROJECTFULLNAME:
 Full name of the project: will end up as part of the ZIP file's name.
     `)
 
-	requestConfigValue(&gradle.internalProjectName, `
+	requestInput(&gradle.internalProjectName, `
 INTERNALPROJECTNAME:
 Used as artifact id for publishing to nexus. Use the format 'customer-name_project-name' if it's a
 customer project, otherwise use 'project-name', or 'project-name-x.x' if you release TOPdesk specific        builds (e.g: for an add-on).
     `)
 
-	requestConfigValue(&gradle.tasVersion, `
+	requestInput(&gradle.tasVersion, `
 TASVERSION:
 The TAS version you want to work on, e.g. 5.4.1
     `)
 
-	requestConfigValue(&gradle.isXfgProject, `
+	requestInput(&gradle.isXfgProject, `
 ISXFGPROJECT:
 Set this to true if this project uses XFG forms. The zip will be locked automatically.
 This also applies to TOPdesk 5.2+.
     `)
 
-	requestConfigValue(&gradle.testCase, `
+	requestInput(&gradle.testCase, `
 TESTCASE:
 The test case id associated with this solution (used by TOPdesk's test team).
     `)
 
-	requestConfigValue(&gradle.customerReferenceNumber, `
+	requestInput(&gradle.customerReferenceNumber, `
 CUSTOMERREFERENCENUMBER:
 The customer reference number of the customer this project is created for.
 You can find this on the customer card in TOPhelp.
     `)
 
-	requestConfigValue(&gradle.uniqueId, `
+	requestInput(&gradle.uniqueId, `
 UNIQUEID:
 A unique identifier for your Solution. It can be anything, but it is mandatory when creating a zip.
 SaaS will use this to match old and new versions, and it can also be used by the Portfolio.
 It is automatically generated but you can choose to overwrite it.
     `)
 
-	requestConfigValue(&gradle.projectType, `
+	requestInput(&gradle.projectType, `
 PROJECTTYPE:
 It is not mandatory, but it there will be a warning if it isn’t filled in.
 This makes sure we can categorize Solutions better in the future.
